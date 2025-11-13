@@ -19,6 +19,7 @@ local move_from_border = 4                      -- Small distance from edge
 local show_pages = true                         -- Show page count
 local show_format = true                        -- Show format (EPUB, PDF, etc.)
 local show_for_all_books = true                 -- true = all books, false = only unread
+local show_file_size_if_no_pages = true         -- Show file size for unopened EPUB/KEPUB
 
 -- Debug
 local debug_mode = false                         -- Show debug logs
@@ -52,8 +53,9 @@ local function getPageCountFromSDR(filepath)
     -- Construct .sdr metadata path
     local sdr_path
     
-    -- For .kepub.epub files
+    -- For .kepub.epub files, SDR is: .book.kepub.sdr (NOT book.kepub.epub.sdr)
     if filepath:match("%.kepub%.epub$") then
+        -- Remove .kepub.epub and add .sdr
         sdr_path = filepath:gsub("%.kepub%.epub$", ".kepub.sdr")
     -- For .epub files  
     elseif filepath:match("%.epub$") then
@@ -156,7 +158,7 @@ local function getBookStats(filepath)
         return count_cache[filepath]
     end
     
-    local stats = { pages = nil }
+    local stats = { pages = nil, file_size = nil }
     local attr = lfs.attributes(filepath)
     if not attr then return stats end
     
@@ -168,6 +170,9 @@ local function getBookStats(filepath)
             local pages = getCachedPageCount(filepath)
             if pages then
                 stats.pages = pages
+            elseif show_file_size_if_no_pages then
+                -- No pages found, store file size instead
+                stats.file_size = getFileSize(filepath)
             end
         elseif ext == "pdf" or ext == "djvu" or ext == "cbz" or ext == "cbt" then
             local success, pages = pcall(getPdfPageCount, filepath)
@@ -187,6 +192,30 @@ local function formatNumber(num)
         return string.format("%.1fK", num / 1000)
     end
     return tostring(num)
+end
+
+-- Get file size and format it
+local function getFileSize(filepath)
+    local attr = lfs.attributes(filepath)
+    if not attr or not attr.size then return nil end
+    
+    local size = attr.size
+    local size_mb = size / (1024 * 1024)
+    
+    if size_mb < 0.1 then
+        -- Less than 0.1 MB, show in KB
+        local size_kb = size / 1024
+        return string.format("%.0fK", size_kb)
+    elseif size_mb < 1 then
+        -- 0.1 - 1 MB
+        return string.format("%.1fM", size_mb)
+    elseif size_mb < 10 then
+        -- 1 - 10 MB
+        return string.format("%.1fM", size_mb)
+    else
+        -- 10+ MB
+        return string.format("%.0fM", size_mb)
+    end
 end
 
 -- Get format name
@@ -226,6 +255,8 @@ local function patchCoverBrowserPageCount(plugin)
             local display_text = nil
             if stats.pages then
                 display_text = formatNumber(stats.pages) .. "p"
+            elseif stats.file_size then
+                display_text = stats.file_size
             end
             
             -- Only create badges if we have something to show

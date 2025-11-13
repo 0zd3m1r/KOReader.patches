@@ -12,7 +12,7 @@ local border_color = Blitbuffer.COLOR_DARK_GRAY
 local background_color = Blitbuffer.COLOR_GRAY_3
 
 -- Badge position
-local badge_position = "top-left"               -- Options: "top-left", "top-right", "bottom-left", "bottom-right"
+local badge_position = "bottom-left"               -- Options: "top-left", "top-right", "bottom-left", "bottom-right"
 local move_from_border = 4                      -- Small distance from edge
 
 -- What to show
@@ -378,6 +378,7 @@ local function patchCoverBrowserPageCount(plugin)
             
             -- Determine starting position
             local pos_x, pos_y
+            local is_opened = self.been_opened or self.status == "complete"
             if badge_position == "top-left" then
                 pos_y = cover_top + pad
             elseif badge_position == "top-right" then
@@ -385,7 +386,11 @@ local function patchCoverBrowserPageCount(plugin)
             elseif badge_position == "bottom-right" then
                 pos_y = cover_bottom - pad - total_height
             else -- bottom-left
-                pos_y = cover_bottom - pad - total_height
+                if is_opened then
+                    pos_y = cover_top + pad
+                else
+                    pos_y = cover_bottom - pad - total_height
+                end
             end
             
             -- Draw badges
@@ -411,4 +416,3 @@ local function patchCoverBrowserPageCount(plugin)
 end
 
 userpatch.registerPatchPluginFunc("coverbrowser", patchCoverBrowserPageCount)
-

@@ -3,7 +3,9 @@
 local Blitbuffer = require("ffi/blitbuffer")
 
 --========================== [[Edit your preferences here]] ================================
-local show_for_unread = true
+local show_for_unread = true                    -- Show for unread books
+local show_for_reading = true                   -- Show for books in progress
+local show_for_finished = false                 -- Show for finished books
 local font_size = 0.6                           -- Smaller font (was 0.8)
 local text_color = Blitbuffer.COLOR_WHITE
 local bg_color = Blitbuffer.COLOR_BLACK
@@ -48,7 +50,23 @@ local function patchCoverBrowserTitle(plugin)
             if not cover or not cover.dimen then return end
             
             if self.is_directory or self.file_deleted then return end
-            if show_for_unread and (self.been_opened or self.status == "complete") then return end
+            
+            -- Check if we should show based on book status
+            local should_show = false
+            
+            if show_for_unread and not self.been_opened and self.status ~= "complete" then
+                should_show = true
+            end
+            
+            if show_for_reading and self.been_opened and self.status ~= "complete" then
+                should_show = true
+            end
+            
+            if show_for_finished and self.status == "complete" then
+                should_show = true
+            end
+            
+            if not should_show then return end
             
             local title = cleanTitle(self.text)
             if not title or #title == 0 then return end

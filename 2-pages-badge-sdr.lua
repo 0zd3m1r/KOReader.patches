@@ -53,17 +53,11 @@ local function getPageCountFromSDR(filepath)
     -- Construct .sdr metadata path
     local sdr_path
     
-    -- For .kepub.epub files, SDR is: book.kepub.sdr (NOT book.sdr or book.kepub.epub.sdr)
-    if filepath:match("%.kepub%.epub$") then
-        -- Replace .epub with .sdr, keeping .kepub
-        sdr_path = filepath:gsub("%.epub$", ".sdr")  -- book.kepub.epub -> book.kepub.sdr
-    -- For .epub files  
-    elseif filepath:match("%.epub$") then
-        sdr_path = filepath .. ".sdr"  -- book.epub -> book.epub.sdr
-    -- For other formats
-    else
-        sdr_path = filepath .. ".sdr"
-    end
+    -- SDR path is always: replace last extension with .sdr
+    -- book.pdf -> book.sdr
+    -- book.kepub.epub -> book.kepub.sdr
+    -- book.epub -> book.sdr
+    sdr_path = filepath:gsub("%.([^%.]+)$", ".sdr")
     
     local metadata_file = sdr_path .. "/metadata.epub.lua"
     

@@ -1,4 +1,5 @@
 --https://github.com/0zd3m1r/KOReader.patches/--
+--[[ Ultra simple title overlay - just text, no complex widgets ]]--
 local Blitbuffer = require("ffi/blitbuffer")
 
 --========================== [[Edit your preferences here]] ================================
@@ -125,3 +126,4 @@ local function patchCoverBrowserTitle(plugin)
 end
 
 userpatch.registerPatchPluginFunc("coverbrowser", patchCoverBrowserTitle)
+

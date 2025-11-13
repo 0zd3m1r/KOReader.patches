@@ -53,13 +53,13 @@ local function getPageCountFromSDR(filepath)
     -- Construct .sdr metadata path
     local sdr_path
     
-    -- For .kepub.epub files, SDR is: .book.kepub.sdr (NOT book.kepub.epub.sdr)
+    -- For .kepub.epub files, SDR is: book.kepub.sdr (NOT book.sdr or book.kepub.epub.sdr)
     if filepath:match("%.kepub%.epub$") then
-        -- Remove .kepub.epub and add .sdr
-        sdr_path = filepath:gsub("%.kepub%.epub$", ".kepub.sdr")
+        -- Replace .epub with .sdr, keeping .kepub
+        sdr_path = filepath:gsub("%.epub$", ".sdr")  -- book.kepub.epub -> book.kepub.sdr
     -- For .epub files  
     elseif filepath:match("%.epub$") then
-        sdr_path = filepath .. ".sdr"
+        sdr_path = filepath .. ".sdr"  -- book.epub -> book.epub.sdr
     -- For other formats
     else
         sdr_path = filepath .. ".sdr"
@@ -152,9 +152,36 @@ local function getPdfPageCount(filepath)
     return nil
 end
 
+-- Get file size and format it
+local function getFileSize(filepath)
+    local attr = lfs.attributes(filepath)
+    if not attr or not attr.size then return nil end
+    
+    local size = attr.size
+    local size_mb = size / (1024 * 1024)
+    
+    if size_mb < 0.1 then
+        -- Less than 0.1 MB, show in KB
+        local size_kb = size / 1024
+        return string.format("%.0fK", size_kb)
+    elseif size_mb < 1 then
+        -- 0.1 - 1 MB
+        return string.format("%.1fM", size_mb)
+    elseif size_mb < 10 then
+        -- 1 - 10 MB
+        return string.format("%.1fM", size_mb)
+    else
+        -- 10+ MB
+        return string.format("%.0fM", size_mb)
+    end
+end
+
 -- Get book stats
 local function getBookStats(filepath)
     if count_cache[filepath] then
+        if debug_mode then
+            logger.info("SDR: Using cached stats for:", filepath)
+        end
         return count_cache[filepath]
     end
     
@@ -170,9 +197,15 @@ local function getBookStats(filepath)
             local pages = getCachedPageCount(filepath)
             if pages then
                 stats.pages = pages
+                if debug_mode then
+                    logger.info("SDR: Stored pages:", pages)
+                end
             elseif show_file_size_if_no_pages then
                 -- No pages found, store file size instead
                 stats.file_size = getFileSize(filepath)
+                if debug_mode then
+                    logger.info("SDR: No pages, stored file size:", stats.file_size)
+                end
             end
         elseif ext == "pdf" or ext == "djvu" or ext == "cbz" or ext == "cbt" then
             local success, pages = pcall(getPdfPageCount, filepath)
@@ -255,8 +288,18 @@ local function patchCoverBrowserPageCount(plugin)
             local display_text = nil
             if stats.pages then
                 display_text = formatNumber(stats.pages) .. "p"
+                if debug_mode then
+                    logger.info("SDR: Display text (pages):", display_text)
+                end
             elseif stats.file_size then
                 display_text = stats.file_size
+                if debug_mode then
+                    logger.info("SDR: Display text (size):", display_text)
+                end
+            end
+            
+            if debug_mode then
+                logger.info("SDR: Format:", ext, "Display:", display_text, "Show format:", show_format)
             end
             
             -- Only create badges if we have something to show
@@ -368,3 +411,4 @@ local function patchCoverBrowserPageCount(plugin)
 end
 
 userpatch.registerPatchPluginFunc("coverbrowser", patchCoverBrowserPageCount)
+

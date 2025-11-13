@@ -1,4 +1,4 @@
-# KOReader Cover Badge Patches
+# KOReader Patches
 
 Elegant page count, format, and title badges for KOReader's Cover Browser.
 
@@ -46,8 +46,8 @@ Elegant page count, format, and title badges for KOReader's Cover Browser.
 ```
 
 2. Choose your patches:
-   - **2-pages-badge-sdr-fixed.lua** - Page count and format badges
-   - **2-title-overlay-fixed.lua** - Title overlay (optional)
+   - **2-pages-badge-sdr.lua** - Page count and format badges
+   - **2-title-overlay.lua** - Title overlay
 
 3. Restart KOReader
 

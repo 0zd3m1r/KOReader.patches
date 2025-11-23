@@ -5,15 +5,15 @@ local Blitbuffer = require("ffi/blitbuffer")
 --========================== [[Edit your preferences here]] ================================
 local show_for_unread = true                    -- Show for unread books
 local show_for_reading = true                   -- Show for books in progress
-local show_for_finished = true                 -- Show for finished books
+local show_for_finished = true                  -- Show for finished books
 local title_font_size = 0.5                     -- Title font size (bigger)
 local author_font_size = 0.3                    -- Author font size (smaller)
 local text_color = Blitbuffer.COLOR_WHITE
 local bg_color = Blitbuffer.COLOR_BLACK
 local border_color = Blitbuffer.COLOR_BLACK
-local max_chars_title = 30                      -- Max chars for title per line
-local max_chars_author = 30                     -- Max chars for author
-local radius_size = 0                          -- Border radius
+local max_chars_title = 20                      -- Max chars for title per line
+local max_chars_author = 20                     -- Max chars for author
+local radius_size = 0                           -- Border radius
 
 --==========================================================================================
 
@@ -21,6 +21,8 @@ local userpatch = require("userpatch")
 local logger = require("logger")
 local TextWidget = require("ui/widget/textwidget")
 local VerticalGroup = require("ui/widget/verticalgroup")
+local HorizontalGroup = require("ui/widget/horizontalgroup")
+local HorizontalSpan = require("ui/widget/horizontalspan")
 local FrameContainer = require("ui/widget/container/framecontainer")
 local Font = require("ui/font")
 local Screen = require("device").screen
@@ -77,6 +79,22 @@ local function truncateText(text, max_len)
     return text
 end
 
+-- Center text widget horizontally with padding
+local function centerWidget(widget, total_width)
+    local widget_width = widget:getSize().w
+    if widget_width >= total_width then
+        return widget
+    end
+    
+    local padding = math.floor((total_width - widget_width) / 2)
+    
+    return HorizontalGroup:new{
+        HorizontalSpan:new{ width = padding },
+        widget,
+        HorizontalSpan:new{ width = padding },
+    }
+end
+
 local function patchCoverBrowserTitle(plugin)
     local MosaicMenu = require("mosaicmenu")
     local MosaicMenuItem = userpatch.getUpValue(MosaicMenu._updateItemsBuildUI, "MosaicMenuItem")
@@ -116,7 +134,8 @@ local function patchCoverBrowserTitle(plugin)
             local cover_x = x + math.floor((self.width - cover_w) / 2)
             local cover_y = y + math.floor((self.height - cover_h) / 2)
             
-            local max_width = math.floor(cover_w * 0.9)
+            local container_width = math.floor(cover_w * 1.0)
+            local inner_width = container_width - Screen:scaleBySize(10) -- padding için
             local title_fsize = Screen:scaleBySize(math.floor(10 * title_font_size))
             local author_fsize = Screen:scaleBySize(math.floor(10 * author_font_size))
             
@@ -135,8 +154,10 @@ local function patchCoverBrowserTitle(plugin)
                 face = Font:getFace("cfont", title_fsize),
                 fgcolor = text_color,
                 bold = true,
-                max_width = max_width,
             }
+            
+            -- Center title widget
+            local centered_title = centerWidget(title_widget, inner_width)
             
             local content
             
@@ -147,36 +168,38 @@ local function patchCoverBrowserTitle(plugin)
                     face = Font:getFace("cfont", author_fsize),
                     fgcolor = text_color,
                     bold = true,
-                    max_width = max_width,
                 }
+                
+                -- Center author widget
+                local centered_author = centerWidget(author_widget, inner_width)
                 
                 -- Vertical group for both lines
                 content = VerticalGroup:new{
-                    align = "center",
-                    title_widget,
-                    author_widget,
+                    centered_title,
+                    centered_author,
                 }
             else
-                content = title_widget
+                content = centered_title
             end
             
-            -- Container
+            -- Container with FIXED WIDTH
             local container = FrameContainer:new{
-                bordersize = 2,
-                radius = radius_size, --Screen:scaleBySize(8),
+                bordersize = 0,
+                radius = radius_size,
                 color = border_color,
                 background = bg_color,
                 padding = Screen:scaleBySize(5),
                 margin = 0,
+                width = container_width,
                 content,
             }
             
-            -- Position: center horizontally, near bottom vertically
+            -- Position: aligned with cover left edge
             local cont_w = container:getSize().w
             local cont_h = container:getSize().h
             
-            local pos_x = cover_x + math.floor((cover_w - cont_w) / 2)
-            local pos_y = cover_y + math.floor((cover_h - cont_h) / 2)
+            local pos_x = cover_x
+            local pos_y = cover_y + math.floor((cover_h - cont_h) / 1.0)
             
             -- Draw
             container:paintTo(bb, pos_x, pos_y)

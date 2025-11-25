@@ -11,9 +11,11 @@ local author_font_size = 0.3                    -- Author font size (smaller)
 local text_color = Blitbuffer.COLOR_WHITE
 local bg_color = Blitbuffer.COLOR_BLACK
 local border_color = Blitbuffer.COLOR_BLACK
-local max_chars_title = 20                      -- Max chars for title per line
-local max_chars_author = 20                     -- Max chars for author
 local radius_size = 0                           -- Border radius
+local max_chars_title = 18                      -- Max chars for title per line (fallback limit)
+local max_chars_author = 30                     -- Max chars for author line
+local bg_width_percent = 1.0                    -- Background width relative to cover (0.0-1.0, 1.0=full cover width)
+local bottom_position = 0.98                     -- Vertical position (1.0=bottom, 0.5=middle, 0.0=top)
 
 --==========================================================================================
 
@@ -79,6 +81,64 @@ local function truncateText(text, max_len)
     return text
 end
 
+-- Split title into 2 lines intelligently
+local function splitTitleToTwoLines(title, max_chars_per_line)
+    if not title or title == "" then
+        return "", ""
+    end
+    
+    -- If short enough, return as single line
+    if #title <= max_chars_per_line then
+        return title, ""
+    end
+    
+    -- Split into words
+    local words = {}
+    for word in title:gmatch("%S+") do
+        table.insert(words, word)
+    end
+    
+    -- If single word, force split
+    if #words == 1 then
+        local mid = math.floor(#title / 2)
+        return title:sub(1, mid), title:sub(mid + 1)
+    end
+    
+    -- Smart split: try to balance lines
+    local line1 = ""
+    local line2 = ""
+    local current_line = 1
+    
+    for i, word in ipairs(words) do
+        if current_line == 1 then
+            if #line1 == 0 then
+                line1 = word
+            elseif #line1 + #word + 1 <= max_chars_per_line then
+                line1 = line1 .. " " .. word
+            else
+                current_line = 2
+                line2 = word
+            end
+        else
+            if #line2 == 0 then
+                line2 = word
+            else
+                line2 = line2 .. " " .. word
+            end
+        end
+    end
+    
+    -- Truncate if needed
+    if #line1 > max_chars_per_line then
+        line1 = line1:sub(1, max_chars_per_line - 2) .. ".."
+    end
+    if #line2 > max_chars_per_line then
+        line2 = line2:sub(1, max_chars_per_line - 2) .. ".."
+    end
+    
+    return line1, line2
+end
+
 -- Center text widget horizontally with padding
 local function centerWidget(widget, total_width)
     local widget_width = widget:getSize().w
@@ -134,7 +194,8 @@ local function patchCoverBrowserTitle(plugin)
             local cover_x = x + math.floor((self.width - cover_w) / 2)
             local cover_y = y + math.floor((self.height - cover_h) / 2)
             
-            local container_width = math.floor(cover_w * 1.0)
+            -- Calculate container width based on percentage
+            local container_width = math.floor(cover_w * bg_width_percent)
             local inner_width = container_width - Screen:scaleBySize(10) -- padding için
             local title_fsize = Screen:scaleBySize(math.floor(10 * title_font_size))
             local author_fsize = Screen:scaleBySize(math.floor(10 * author_font_size))
@@ -142,22 +203,52 @@ local function patchCoverBrowserTitle(plugin)
             -- Split into book title and author
             local book_title, author = splitTitleAuthor(raw_title)
             
-            -- Convert to uppercase and truncate
-            book_title = string.upper(truncateText(book_title, max_chars_title))
+            -- Convert to uppercase first
+            book_title = string.upper(book_title)
             if author ~= "" then
-                author = string.upper(truncateText(author, max_chars_author))
+                author = string.upper(author)
             end
             
-            -- Create title widget (bigger font)
-            local title_widget = TextWidget:new{
-                text = book_title,
+            -- Calculate dynamic max chars based on cover width and font size
+            -- Simple estimation: char_width ≈ font_size * 0.65 (empirical average for bold fonts)
+            local max_chars_title_dynamic = math.floor(inner_width / (title_fsize * 0.65))
+            local max_chars_author_dynamic = math.floor(inner_width / (author_fsize * 0.65))
+            
+            -- Use the smaller of dynamic or fixed limit
+            max_chars_title_dynamic = math.min(max_chars_title_dynamic, max_chars_title)
+            max_chars_author_dynamic = math.min(max_chars_author_dynamic, max_chars_author)
+            
+            -- Split title into 2 lines
+            local title_line1, title_line2 = splitTitleToTwoLines(book_title, max_chars_title_dynamic)
+            
+            -- Truncate author to 1 line
+            if author ~= "" then
+                author = truncateText(author, max_chars_author_dynamic)
+            end
+            
+            -- Create title widgets
+            local title_widget1 = TextWidget:new{
+                text = title_line1,
                 face = Font:getFace("cfont", title_fsize),
                 fgcolor = text_color,
                 bold = true,
             }
             
-            -- Center title widget
-            local centered_title = centerWidget(title_widget, inner_width)
+            local centered_title1 = centerWidget(title_widget1, inner_width)
+            
+            local title_widgets = { centered_title1 }
+            
+            -- Add second title line if exists
+            if title_line2 ~= "" then
+                local title_widget2 = TextWidget:new{
+                    text = title_line2,
+                    face = Font:getFace("cfont", title_fsize),
+                    fgcolor = text_color,
+                    bold = true,
+                }
+                local centered_title2 = centerWidget(title_widget2, inner_width)
+                table.insert(title_widgets, centered_title2)
+            end
             
             local content
             
@@ -173,14 +264,12 @@ local function patchCoverBrowserTitle(plugin)
                 -- Center author widget
                 local centered_author = centerWidget(author_widget, inner_width)
                 
-                -- Vertical group for both lines
-                content = VerticalGroup:new{
-                    centered_title,
-                    centered_author,
-                }
-            else
-                content = centered_title
+                -- Add author to title widgets
+                table.insert(title_widgets, centered_author)
             end
+            
+            -- Vertical group for all lines
+            content = VerticalGroup:new(title_widgets)
             
             -- Container with FIXED WIDTH
             local container = FrameContainer:new{
@@ -194,12 +283,16 @@ local function patchCoverBrowserTitle(plugin)
                 content,
             }
             
-            -- Position: aligned with cover left edge
+            -- Position: centered horizontally on cover, custom vertical position
             local cont_w = container:getSize().w
             local cont_h = container:getSize().h
             
-            local pos_x = cover_x
-            local pos_y = cover_y + math.floor((cover_h - cont_h) / 1.0)
+            -- Center horizontally: cover başlangıcı + (cover genişliği - container genişliği) / 2
+            local pos_x = cover_x + math.floor((cover_w - container_width) / 2)
+            
+            -- Calculate vertical position based on bottom_position parameter
+            -- 1.0 = at bottom, 0.5 = middle, 0.0 = top
+            local pos_y = cover_y + math.floor((cover_h - cont_h) * bottom_position)
             
             -- Draw
             container:paintTo(bb, pos_x, pos_y)
